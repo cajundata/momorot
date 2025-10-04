@@ -125,7 +125,7 @@ docker-volumes/
 containerd/
 
 # Project-specific data directories
-data/exports/
+data/
 exports/
 *.csv
 !test/fixtures/*.csv
@@ -140,7 +140,6 @@ bubbletea-debug.log
 debug.log
 
 # Air hot reload
-.air.toml
 tmp/
 
 # SQLite backup files
@@ -162,3 +161,6 @@ litestream.yml
 # Run metadata
 runs.log
 fetch.log
+
+# AI Tools
+.claude/
