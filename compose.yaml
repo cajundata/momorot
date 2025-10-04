@@ -1,0 +1,159 @@
+services:
+  # Development service - for active development with hot reload
+  momorot-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        - GO_VERSION=1.25.1
+    container_name: momorot-tui-dev
+    image: momorot-tui:dev
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Persistent data storage
+      - momorot-data:/app/data
+      # Configuration files
+      - ./configs:/app/configs
+      # SQLite database files
+      - sqlite-data:/app/data/db
+      # Export directory for CSV outputs
+      - exports-data:/app/exports
+      # Go modules cache
+      - go-modules:/go/pkg/mod
+      # Go build cache
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - CGO_ENABLED=0  # Pure Go build with modernc.org/sqlite
+      - GOOS=linux
+      - GOARCH=amd64
+      - MOMOROT_DATA_DIR=/app/data
+      - MOMOROT_CONFIG_PATH=/app/configs
+      - MOMOROT_LOG_LEVEL=debug
+      - MOMOROT_DB_PATH=/app/data/db/momentum.db
+      - MOMOROT_EXPORT_DIR=/app/exports
+      - ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY:-}
+      # Development specific
+      - AIR_CONFIG_PATH=/app/.air.toml
+    ports:
+      # Main application port (if needed for API/web UI)
+      - "8080:8080"
+      # Delve debugger port
+      - "2345:2345"
+    networks:
+      - momorot-network
+    stdin_open: true
+    tty: true
+    # Run air for hot reload (override with bash for debugging)
+    command: ["bash", "-c", "if [ -f go.mod ]; then air; else echo 'Waiting for go.mod initialization...' && bash; fi"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/data/db/momentum.db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Production service - for running the built application
+  momorot-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - GO_VERSION=1.25.1
+    container_name: momorot-tui-prod
+    image: momorot-tui:prod
+    volumes:
+      # Persistent data (distroless uses /data)
+      - momorot-data:/data
+      - ./configs:/app/configs:ro
+      - sqlite-data:/data/db
+      - exports-data:/data/exports
+    environment:
+      - MOMOROT_DATA_DIR=/data
+      - MOMOROT_CONFIG_PATH=/app/configs
+      - MOMOROT_LOG_LEVEL=info
+      - MOMOROT_DB_PATH=/data/db/momentum.db
+      - MOMOROT_EXPORT_DIR=/data/exports
+      - ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY:-}
+    ports:
+      - "8080:8080"
+    networks:
+      - momorot-network
+    restart: unless-stopped
+    profiles:
+      - production
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # SQLite web interface for database management (development only)
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    container_name: momorot-sqlite-web
+    environment:
+      - SQLITE_DATABASE=/data/momentum.db
+    volumes:
+      - sqlite-data:/data:ro
+    ports:
+      - "8090:8080"
+    networks:
+      - momorot-network
+    profiles:
+      - dev-tools
+    depends_on:
+      - momorot-dev
+
+  # Adminer - alternative database management tool
+  adminer:
+    image: adminer:standalone
+    container_name: momorot-adminer
+    ports:
+      - "8091:8080"
+    networks:
+      - momorot-network
+    environment:
+      - ADMINER_DEFAULT_SERVER=sqlite
+      - ADMINER_DESIGN=pepa-linha
+    profiles:
+      - dev-tools
+
+  # Litestream for SQLite replication (optional)
+  litestream:
+    image: litestream/litestream:latest
+    container_name: momorot-litestream
+    volumes:
+      - sqlite-data:/data:ro
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: ["replicate"]
+    profiles:
+      - backup
+    depends_on:
+      - momorot-dev
+    networks:
+      - momorot-network
+
+networks:
+  momorot-network:
+    driver: bridge
+    name: momorot-network
+
+volumes:
+  momorot-data:
+    driver: local
+    name: momorot-data
+  sqlite-data:
+    driver: local
+    name: momorot-sqlite-data
+  exports-data:
+    driver: local
+    name: momorot-exports
+  go-modules:
+    driver: local
+    name: momorot-go-modules
+  go-build-cache:
+    driver: local
+    name: momorot-go-build-cache
