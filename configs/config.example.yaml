@@ -1,0 +1,114 @@
+# Momentum Screener TUI Configuration
+# Copy this file to config.yaml and customize for your environment
+
+# Alpha Vantage API Configuration
+alpha_vantage:
+  # Get your free API key at: https://www.alphavantage.co/support/#api-key
+  # Can also be set via environment variable: ALPHAVANTAGE_API_KEY
+  api_key: "YOUR_API_KEY_HERE"
+
+  # Free tier: 25 requests per day
+  # Set to daily limit to prevent exceeding quota
+  daily_request_limit: 25
+
+  # Base URL for API calls (typically no need to change)
+  base_url: "https://www.alphavantage.co/query"
+
+# Universe of symbols to track
+# Free tier can handle ~25 symbols per day with delta fetching
+universe:
+  - "QQQ"   # Nasdaq-100 ETF
+  - "IWM"   # Russell 2000 ETF
+  - "SPY"   # S&P 500 ETF
+  - "DIA"   # Dow Jones Industrial Average ETF
+  - "EEM"   # Emerging Markets ETF
+  - "EFA"   # EAFE (Developed Markets ex-US) ETF
+  - "TLT"   # 20+ Year Treasury Bond ETF
+  - "GLD"   # Gold ETF
+  - "SLV"   # Silver ETF
+  - "USO"   # Oil ETF
+  - "VNQ"   # Real Estate ETF
+  - "XLF"   # Financial Sector ETF
+  - "XLE"   # Energy Sector ETF
+  - "XLK"   # Technology Sector ETF
+  - "XLV"   # Healthcare Sector ETF
+  - "XLY"   # Consumer Discretionary ETF
+  - "XLP"   # Consumer Staples ETF
+  - "XLI"   # Industrial Sector ETF
+  - "XLB"   # Materials Sector ETF
+  - "XLU"   # Utilities Sector ETF
+  - "XLRE"  # Real Estate Sector ETF
+  - "VGK"   # European Stocks ETF
+  - "VWO"   # Emerging Markets ETF
+  - "AGG"   # Aggregate Bond ETF
+  - "HYG"   # High Yield Corporate Bond ETF
+
+# Momentum calculation parameters (in trading days)
+lookbacks:
+  r1m: 21    # 1 month = ~21 trading days
+  r3m: 63    # 3 months = ~63 trading days
+  r6m: 126   # 6 months = ~126 trading days
+  r12m: 252  # 12 months = ~252 trading days
+
+# Volatility calculation windows (in trading days)
+vol_windows:
+  short: 63   # 3-month volatility window
+  long: 126   # 6-month volatility window
+
+# Scoring parameters
+scoring:
+  # Volatility penalty lambda (0.0 to 1.0)
+  # Higher values penalize volatility more heavily
+  penalty_lambda: 0.35
+
+  # Minimum average dollar volume (in USD)
+  # Filters out low-liquidity symbols
+  min_adv_usd: 5000000  # $5M minimum daily volume
+
+  # Breadth filter: require at least N positive returns out of M lookbacks
+  # Example: require 3 out of 4 lookbacks to be positive
+  breadth_min_positive: 3
+  breadth_total_lookbacks: 4
+
+# Data storage
+data:
+  # Directory for SQLite database
+  data_dir: "./data"
+
+  # Database file name
+  db_name: "momentum.db"
+
+  # Export directory for CSV files
+  export_dir: "./exports"
+
+# Application settings
+app:
+  # Number of top symbols to display in Leaders screen
+  top_n: 5
+
+  # Refresh behavior
+  auto_export: true  # Automatically export CSV on successful refresh
+
+  # Log level: debug, info, warn, error
+  log_level: "info"
+
+  # Log format: json or text
+  log_format: "json"
+
+# Fetcher settings
+fetcher:
+  # Worker pool size for concurrent fetching
+  # Keep low to respect rate limits
+  max_workers: 5
+
+  # Request timeout in seconds
+  timeout: 30
+
+  # Retry settings
+  max_retries: 3
+  exponential_backoff: true
+  initial_retry_delay: 1  # seconds
+
+  # Cache behavior
+  cache_enabled: true
+  only_fetch_deltas: true  # Only fetch missing days since last update

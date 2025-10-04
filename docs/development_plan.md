@@ -8,21 +8,22 @@ A containerized Go TUI application that fetches daily OHLCV data, computes momen
 ## Phase 1: Foundation & Setup (Days 1-3)
 
 ### 1.1 Project Initialization
-- [ ] Initialize Go module: `go mod init github.com/[username]/momorot-tui`
-- [ ] Set up Go 1.21 environment
-- [ ] Create `.air.toml` for hot reload configuration
-- [ ] Create `config/config.example.yaml` with all required fields
-- [ ] Set up environment variable handling for API keys
+- [x] Initialize Go module: `go mod init github.com/malbwa/momorot`
+- [x] Set up Go 1.25.1 environment
+- [x] Create `.air.toml` for hot reload configuration
+- [x] Create `configs/config.example.yaml` with all required fields
+- [x] Set up `.env.example` for environment variable handling
+- [x] Update `.gitignore` to exclude `config.yaml`, `.env`, `data/`, `exports/`
 
 ### 1.2 Core Dependencies
 ```bash
-# Core TUI framework
-go get github.com/charmbracelet/bubbletea@v1.2.4
-go get github.com/charmbracelet/bubbles@v0.20.0
+# Core TUI framework (stable v1.x series)
+go get github.com/charmbracelet/bubbletea@v1.3.10
+go get github.com/charmbracelet/bubbles@v0.21.0
 go get github.com/charmbracelet/lipgloss@v1.0.0
 
-# Database
-go get modernc.org/sqlite@v1.33.1
+# Database (pure Go, cgo-free)
+go get modernc.org/sqlite@v1.39.0
 
 # Configuration
 go get github.com/spf13/viper@latest
@@ -35,16 +36,17 @@ go get github.com/stretchr/testify@latest
 ```
 
 ### 1.3 Database Layer (`internal/db/`)
-- [ ] Create SQLite connection manager with proper pragmas
+- [ ] Create SQLite connection manager with proper pragmas (WAL mode, STRICT tables)
 - [ ] Implement migrations system
 - [ ] Create initial schema (symbols, prices, indicators, runs, fetch_log)
-- [ ] Add connection pooling and WAL mode configuration
+- [ ] Configure pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `temp_store=MEMORY`
 - [ ] Create repository interfaces for each table
+- [ ] Add indexes: `idx_prices_symbol_date`, `idx_indicators_date_rank`
 
 **Key Files:**
 - `internal/db/connection.go` - Database connection and pragmas
 - `internal/db/migrations.go` - Migration runner
-- `internal/db/schema.sql` - Initial schema
+- `internal/db/schema.sql` - Initial schema with STRICT tables
 - `internal/db/repositories.go` - Data access layer
 
 ---
@@ -58,16 +60,18 @@ go get github.com/stretchr/testify@latest
 - [ ] Set defaults for optional parameters
 
 ### 2.2 Data Fetchers (`internal/fetch/`)
-- [ ] Create Alpha Vantage client with rate limiting (25 req/day)
-- [ ] Implement CSV parser for Stooq manual imports
-- [ ] Add request caching and delta fetching logic
-- [ ] Create fetch scheduler for universe management
-- [ ] Implement exponential backoff for retries
+- [ ] Create Alpha Vantage client with rate limiting (strict 25 req/day free tier)
+- [ ] Implement `TIME_SERIES_DAILY_ADJUSTED` endpoint for OHLCV + adjusted close
+- [ ] Implement CSV parser for Stooq manual imports (bootstrap/fallback)
+- [ ] Add request caching and delta fetching (only fetch missing days)
+- [ ] Create fetch scheduler for universe management (stagger large universes)
+- [ ] Implement exponential backoff for retries with friendly quota messages
+- [ ] Use controlled worker pool to respect API budget
 
 **Key Files:**
-- `internal/fetch/alphavantage.go` - API client
-- `internal/fetch/csv_importer.go` - CSV parsing
-- `internal/fetch/scheduler.go` - Symbol scheduling
+- `internal/fetch/alphavantage.go` - API client with 25/day limit enforcement
+- `internal/fetch/csv_importer.go` - Stooq CSV parsing
+- `internal/fetch/scheduler.go` - Symbol scheduling and staggering
 - `internal/fetch/rate_limiter.go` - Request budget management
 
 ---
@@ -80,103 +84,107 @@ go get github.com/stretchr/testify@latest
 - [ ] Business day calculations
 
 ### 3.2 Indicators (`internal/analytics/indicators.go`)
-- [ ] Calculate multi-horizon returns (1M, 3M, 6M, 12M)
-- [ ] Compute rolling volatility (63 & 126 day windows)
-- [ ] Implement breadth filters (positive N-of-M lookbacks)
-- [ ] Calculate average dollar volume (ADV)
+- [ ] Calculate multi-horizon total returns using `adj_close` (1M=21d, 3M=63d, 6M=126d, 12M=252d)
+- [ ] Compute rolling volatility: σ of daily log returns over 63/126 day windows
+- [ ] Implement breadth filters (require positive N-of-M lookbacks)
+- [ ] Calculate average dollar volume (ADV) with minimum threshold ($5M default)
 
 ### 3.3 Scoring System (`internal/analytics/scoring.go`)
-- [ ] Composite momentum score with volatility penalty
-- [ ] Z-score normalization
-- [ ] Deterministic tie-breaking rules
-- [ ] Ranking algorithm across universe
+- [ ] Composite momentum score: z-score or min-max of lookback returns minus λ·volatility
+- [ ] Volatility penalty parameter λ = 0.35 (configurable)
+- [ ] Z-score normalization across universe
+- [ ] Deterministic tie-breaking: lower volatility first, then higher liquidity (ADV)
+- [ ] Ranking algorithm producing deterministic, reproducible results
 
 **Testing Requirements:**
 - Unit tests with golden vectors for all calculations
-- Deterministic output validation
-- Performance benchmarks for large universes
+- Deterministic output validation (byte-identical given same inputs)
+- Performance benchmarks for 25-symbol universe
+- Idempotent re-run verification
 
 ---
 
 ## Phase 4: Terminal UI Implementation (Days 11-15)
 
 ### 4.1 Core TUI Structure (`internal/ui/`)
-- [ ] Main Bubble Tea program setup
-- [ ] Screen navigation system
-- [ ] Keyboard shortcuts handler
-- [ ] Theme and styling with Lip Gloss
+- [ ] Main Bubble Tea v1.3.10 program setup (stable v1.x, NOT v2 beta)
+- [ ] Screen navigation system with `←/→` tab navigation
+- [ ] Keyboard shortcuts: `r` refresh, `/` search, `e` export CSV, `q` quit
+- [ ] Theme and styling with Lip Gloss v1.0.0
+- [ ] Non-blocking refresh with spinner (use Bubbles v0.21.0 spinner)
 
 ### 4.2 Individual Screens
 
 #### Dashboard Screen (`internal/ui/screens/dashboard.go`)
-- [ ] Last run status display
-- [ ] Cache health metrics
-- [ ] API quota status
+- [ ] Last run status display (from `runs` table)
+- [ ] Cache health metrics (last fetched date per symbol)
+- [ ] API quota status (25 req/day budget, next reset)
 - [ ] Quick action buttons
 
 #### Leaders Screen (`internal/ui/screens/leaders.go`)
 - [ ] Top-5/Top-N ranking table
-- [ ] Columns: Rank, Symbol, Score, Returns, Volatility, ADV
-- [ ] Sortable columns
+- [ ] Columns: Rank, Symbol, Score, R1M, R3M, R6M, Vol, ADV
+- [ ] Data from `indicators` table joined with `prices`
 - [ ] Drill-down to symbol detail
 
 #### Universe Screen (`internal/ui/screens/universe.go`)
-- [ ] Full symbol list with search
-- [ ] Active/inactive toggle
-- [ ] Bulk operations
+- [ ] Full symbol list with `/` search
+- [ ] Active/inactive toggle (updates `symbols.active` column)
+- [ ] Display asset_type (ETF/STOCK/INDEX)
 - [ ] Add/remove symbols
 
 #### Symbol Detail Screen (`internal/ui/screens/symbol.go`)
-- [ ] Price sparkline chart
-- [ ] Return metrics table
-- [ ] Volatility history
+- [ ] Price sparkline chart (using Bubbles components)
+- [ ] Return metrics table (R1M, R3M, R6M, R12M)
+- [ ] Volatility history (3M, 6M windows)
 - [ ] Raw vs adjusted close comparison
 
 #### Runs/Logs Screen (`internal/ui/screens/logs.go`)
-- [ ] Run history table
-- [ ] Error log viewer
-- [ ] Export functionality
-- [ ] Log filtering
+- [ ] Run history table (from `runs` table)
+- [ ] Error log viewer (from `fetch_log` where ok=0)
+- [ ] Export logs functionality
+- [ ] Filter by run_id, symbol, status
 
 ### 4.3 Common Components (`internal/ui/components/`)
-- [ ] Table widget with sorting
-- [ ] Sparkline chart
-- [ ] Progress spinner
-- [ ] Search input
-- [ ] Status bar
+- [ ] Table widget with sorting (using Bubbles v0.21.0 table)
+- [ ] Sparkline chart (custom or Bubbles component)
+- [ ] Progress spinner (Bubbles spinner for non-blocking refresh)
+- [ ] Search input (Bubbles textinput)
+- [ ] Status bar with help text
 
 ---
 
 ## Phase 5: Export & Reporting (Days 16-17)
 
 ### 5.1 Export Module (`internal/export/`)
-- [ ] CSV export for rankings
-- [ ] CSV export for full universe metrics
-- [ ] Run metadata export
-- [ ] Configurable output directory
+- [ ] CSV export for Top-5 leaders (leaders-YYYYMMDD.csv)
+- [ ] CSV export for full universe rankings
+- [ ] Run metadata export (runs.csv)
+- [ ] Output to `./exports` or configurable `export_dir`
+- [ ] Auto-generate on successful refresh
 
 ### 5.2 Report Templates
-- [ ] Daily leaders report
-- [ ] Full ranking report
-- [ ] Symbol detail report
-- [ ] Run summary report
+- [ ] Daily leaders report: Rank, Symbol, Score, R1M, R3M, R6M, Vol, ADV
+- [ ] Full ranking report: all symbols with indicators
+- [ ] Symbol detail report: full time series and metrics
+- [ ] Run summary report: status, timing, symbols fetched
 
 ---
 
 ## Phase 6: Main Application Assembly (Days 18-19)
 
 ### 6.1 CLI Entry Point (`cmd/momo/main.go`)
-- [ ] Command-line argument parsing
-- [ ] Subcommands: run, refresh, export, ping
-- [ ] Version information embedding
-- [ ] Graceful shutdown handling
+- [ ] Command-line argument parsing (flags package or cobra)
+- [ ] Subcommands: `run` (TUI), `refresh`, `export`, `ping` (for healthcheck)
+- [ ] Version information embedding via ldflags
+- [ ] Graceful shutdown handling (SIGINT, SIGTERM)
 
 ### 6.2 Application Lifecycle
-- [ ] Database initialization
-- [ ] Config loading
-- [ ] TUI launch
-- [ ] Background refresh worker
-- [ ] Signal handling
+- [ ] Database initialization at `./data/momentum.db` (or configurable `data_dir`)
+- [ ] Config loading from `config.yaml` or env vars (ALPHAVANTAGE_API_KEY)
+- [ ] TUI launch with Bubble Tea program
+- [ ] Background refresh worker with controlled concurrency
+- [ ] Signal handling and cleanup (flush DB, close connections)
 
 ---
 
@@ -189,32 +197,38 @@ go get github.com/stretchr/testify@latest
 - [ ] CSV parsing
 
 ### 7.2 Integration Tests
-- [ ] End-to-end data flow
-- [ ] Database migrations
-- [ ] API fixtures/recording
-- [ ] Export verification
+- [ ] End-to-end data flow (fetch → compute → display → export)
+- [ ] Database migrations up/down idempotency
+- [ ] API fixtures/recording for Alpha Vantage (record/replay)
+- [ ] CSV import from Stooq fixtures
+- [ ] Export verification (CSV format and content)
 
 ### 7.3 Performance Tests
-- [ ] 25-symbol universe benchmark
-- [ ] Database query optimization
-- [ ] Memory profiling
-- [ ] Concurrent fetch testing
+- [ ] 25-symbol universe full refresh < 10s (excluding network)
+- [ ] Database query optimization with EXPLAIN QUERY PLAN
+- [ ] Memory profiling (target: minimal footprint)
+- [ ] Concurrent fetch testing with worker pool
+- [ ] Determinism test: byte-identical output for fixed DB snapshot
 
 ---
 
 ## Phase 8: Containerization & Deployment (Days 23-24)
 
 ### 8.1 Docker Setup
-- [ ] Multi-stage Dockerfile optimization
-- [ ] Distroless runtime image
-- [ ] Volume configuration for data persistence
-- [ ] Security hardening (non-root, read-only FS)
+- [ ] Multi-stage Dockerfile using `golang:1.25.1` as builder
+- [ ] Runtime image: `gcr.io/distroless/static:nonroot`
+- [ ] Build static binary with `CGO_ENABLED=0` (pure Go)
+- [ ] Volume configuration for `/data` persistence
+- [ ] Security hardening: non-root user (65532), read-only FS, `cap_drop: ALL`
+- [ ] Target image size: ≤ 20-30 MB
 
 ### 8.2 Docker Compose
-- [ ] Development environment
+- [ ] Use Docker Compose v2.40.0 syntax (no `version:` field)
+- [ ] Development environment configuration
 - [ ] Production configuration
-- [ ] Health checks
-- [ ] Log aggregation
+- [ ] Health check using `--ping` subcommand
+- [ ] Structured JSON logging output
+- [ ] Docker Engine 28.x compatibility
 
 ---
 
@@ -237,16 +251,17 @@ go get github.com/stretchr/testify@latest
 ## Phase 10: Production Readiness (Days 27-28)
 
 ### 10.1 Operational Features
-- [ ] Health check endpoint
-- [ ] Metrics collection
-- [ ] Structured logging
-- [ ] Backup automation
+- [ ] Health check: `--ping` subcommand exits 0 if healthy
+- [ ] Structured JSON logging with run_id, symbol, action, outcome, latency
+- [ ] Backup automation: SQLite VACUUM INTO or optional Litestream
+- [ ] Friendly error messages for quota exhaustion
 
 ### 10.2 Final Validation
-- [ ] Acceptance criteria verification
-- [ ] Performance benchmarks
-- [ ] Security audit
-- [ ] Docker image optimization
+- [ ] Acceptance criteria verification from requirements doc
+- [ ] Performance benchmarks (25-symbol < 10s)
+- [ ] Security audit: no secrets committed, read-only FS, non-root
+- [ ] Docker image optimization: verify ≤ 20-30 MB final size
+- [ ] Cross-platform build: linux/amd64 and linux/arm64
 
 ---
 
@@ -291,22 +306,25 @@ go get github.com/stretchr/testify@latest
 
 ## Success Criteria
 
-- [ ] Handles 25-symbol universe within API limits
-- [ ] Deterministic rankings given same data
-- [ ] TUI responsive and navigable
-- [ ] Docker image < 30MB
-- [ ] Full refresh < 10s (excluding network)
-- [ ] 80%+ test coverage
-- [ ] Zero critical security issues
+- [ ] Handles 25-symbol universe within Alpha Vantage free tier (25 req/day)
+- [ ] Deterministic, byte-identical rankings given same data and config
+- [ ] TUI responsive and navigable with all screens functional
+- [ ] Docker image ≤ 20-30 MB (distroless + static binary)
+- [ ] Full delta refresh < 10s for 25 symbols (excluding network I/O)
+- [ ] 80%+ test coverage with golden vectors
+- [ ] Zero critical security issues (secrets, permissions, container hardening)
+- [ ] Pure Go build (CGO_ENABLED=0) for portability
+- [ ] SQLite with WAL mode, STRICT tables, proper indexes
 
 ---
 
 ## Next Steps
 
-1. **Immediate**: Set up Go module and install dependencies
-2. **Day 1**: Create database schema and connection manager
-3. **Day 2**: Implement configuration system
-4. **Day 3**: Begin Alpha Vantage client development
+1. **Immediate**: Initialize Go 1.25.1 module and install core dependencies
+2. **Day 1**: Create SQLite schema with STRICT tables, WAL pragmas, and migrations
+3. **Day 2**: Implement configuration system (Viper + env vars)
+4. **Day 3**: Begin Alpha Vantage client with 25 req/day rate limiter
+5. **Day 4**: Set up Bubble Tea v1.3.10 TUI skeleton with navigation
 
 ---
 
@@ -315,5 +333,8 @@ go get github.com/stretchr/testify@latest
 - All dates assume full-time development
 - Phases can be adjusted based on progress
 - Some components can be developed in parallel
-- Regular testing throughout all phases
+- Regular testing throughout all phases (aim for 80%+ coverage)
 - Daily commits to track progress
+- **Tech stack pinned to stable versions**: Go 1.25.1, Bubble Tea v1.3.10 (NOT v2 beta), Bubbles v0.21.0, Lip Gloss v1.0.0, modernc.org/sqlite v1.39.0
+- **Container stack**: Docker Engine 28.x, Compose v2.40.0, distroless runtime
+- **Critical**: Pure Go build (CGO_ENABLED=0) for cross-platform compatibility and minimal container size
