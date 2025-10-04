@@ -16,24 +16,36 @@ A containerized Go TUI application that fetches daily OHLCV data, computes momen
 - [x] Update `.gitignore` to exclude `config.yaml`, `.env`, `data/`, `exports/`
 
 ### 1.2 Core Dependencies
+- [x] Install Bubble Tea v1.3.4 (TUI framework - stable v1.x series)
+- [x] Install Bubbles v0.21.0 (TUI components)
+- [x] Install Lip Gloss v1.0.0 (styling)
+- [x] Install modernc.org/sqlite v1.39.0 (pure Go, cgo-free database)
+- [x] Install Viper v1.21.0 (configuration management)
+- [x] Install go-retryablehttp v0.7.8 (HTTP client with retry)
+- [x] Install testify v1.11.1 (testing framework)
+- [x] Run go mod tidy to organize dependencies
+
+**Installed versions:**
 ```bash
 # Core TUI framework (stable v1.x series)
-go get github.com/charmbracelet/bubbletea@v1.3.10
-go get github.com/charmbracelet/bubbles@v0.21.0
-go get github.com/charmbracelet/lipgloss@v1.0.0
+github.com/charmbracelet/bubbletea v1.3.4
+github.com/charmbracelet/bubbles v0.21.0
+github.com/charmbracelet/lipgloss v1.0.0
 
 # Database (pure Go, cgo-free)
-go get modernc.org/sqlite@v1.39.0
+modernc.org/sqlite v1.39.0
 
 # Configuration
-go get github.com/spf13/viper@latest
+github.com/spf13/viper v1.21.0
 
 # HTTP client with retry
-go get github.com/hashicorp/go-retryablehttp@latest
+github.com/hashicorp/go-retryablehttp v0.7.8
 
 # Testing
-go get github.com/stretchr/testify@latest
+github.com/stretchr/testify v1.11.1
 ```
+
+**Note:** Bubble Tea v1.3.4 is used instead of v1.3.10 for compatibility with Bubbles v0.21.0 (latest stable release).
 
 ### 1.3 Database Layer (`internal/db/`)
 - [ ] Create SQLite connection manager with proper pragmas (WAL mode, STRICT tables)
@@ -107,7 +119,7 @@ go get github.com/stretchr/testify@latest
 ## Phase 4: Terminal UI Implementation (Days 11-15)
 
 ### 4.1 Core TUI Structure (`internal/ui/`)
-- [ ] Main Bubble Tea v1.3.10 program setup (stable v1.x, NOT v2 beta)
+- [ ] Main Bubble Tea v1.3.4 program setup (stable v1.x, NOT v2 beta)
 - [ ] Screen navigation system with `←/→` tab navigation
 - [ ] Keyboard shortcuts: `r` refresh, `/` search, `e` export CSV, `q` quit
 - [ ] Theme and styling with Lip Gloss v1.0.0
@@ -335,6 +347,6 @@ go get github.com/stretchr/testify@latest
 - Some components can be developed in parallel
 - Regular testing throughout all phases (aim for 80%+ coverage)
 - Daily commits to track progress
-- **Tech stack pinned to stable versions**: Go 1.25.1, Bubble Tea v1.3.10 (NOT v2 beta), Bubbles v0.21.0, Lip Gloss v1.0.0, modernc.org/sqlite v1.39.0
+- **Tech stack pinned to stable versions**: Go 1.25.1, Bubble Tea v1.3.4 (NOT v2 beta), Bubbles v0.21.0, Lip Gloss v1.0.0, modernc.org/sqlite v1.39.0
 - **Container stack**: Docker Engine 28.x, Compose v2.40.0, distroless runtime
 - **Critical**: Pure Go build (CGO_ENABLED=0) for cross-platform compatibility and minimal container size

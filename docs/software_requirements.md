@@ -49,7 +49,7 @@
 ## 4) Tech Stack (pin to current stable)
 
 - **Go**: **1.25.1** (latest stable).
-- **TUI framework**: **Bubble Tea v1.3.10** (latest stable); v2 is beta, not used for prod yet.
+- **TUI framework**: **Bubble Tea v1.3.4** (stable v1.x compatible with Bubbles v0.21.0); v2 is beta, not used for prod yet.
 - **TUI components**: **Bubbles v0.21.0** (latest release).
 - **Styling**: **Lip Gloss v1.0.0**.
 - **DB (embedded)**: **SQLite** via **modernc.org/sqlite v1.39.0** (pure Go, cgo-free).  
@@ -277,7 +277,8 @@ CREATE INDEX IF NOT EXISTS idx_indicators_date_rank ON indicators(date DESC, ran
 ## 18) Change Log (v0.2)
 
 - **Storage**: Standardized on **SQLite** (removed fs/JSON option); added WAL, STRICT tables, schema above.
-- **Stack versions**: Updated to Go **1.25.1**, Bubble Tea **v1.3.10**, Bubbles **v0.21.0**, Lip Gloss **v1.0.0**, modernc.org/sqlite **v1.39.0**, Docker Engine **28.x**, Compose **v2.40.0**.
+- **Stack versions**: Updated to Go **1.25.1**, Bubble Tea **v1.3.4**, Bubbles **v0.21.0**, Lip Gloss **v1.0.0**, modernc.org/sqlite **v1.39.0**, Docker Engine **28.x**, Compose **v2.40.0**.
+- **Version compatibility note**: Bubble Tea v1.3.4 is used instead of v1.3.10 for compatibility with Bubbles v0.21.0 (latest stable release).
 
 ---
 
