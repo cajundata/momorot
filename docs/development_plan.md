@@ -48,18 +48,22 @@ github.com/stretchr/testify v1.11.1
 **Note:** Bubble Tea v1.3.4 is used instead of v1.3.10 for compatibility with Bubbles v0.21.0 (latest stable release).
 
 ### 1.3 Database Layer (`internal/db/`)
-- [ ] Create SQLite connection manager with proper pragmas (WAL mode, STRICT tables)
-- [ ] Implement migrations system
-- [ ] Create initial schema (symbols, prices, indicators, runs, fetch_log)
-- [ ] Configure pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `temp_store=MEMORY`
-- [ ] Create repository interfaces for each table
-- [ ] Add indexes: `idx_prices_symbol_date`, `idx_indicators_date_rank`
+- [x] Create SQLite connection manager with proper pragmas (WAL mode, STRICT tables)
+- [x] Implement migrations system with version tracking
+- [x] Create initial schema (symbols, prices, indicators, runs, fetch_log)
+- [x] Configure pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `temp_store=MEMORY`
+- [x] Create repository interfaces for each table (Symbol, Price, Indicator, Run, FetchLog)
+- [x] Add indexes: `idx_prices_symbol_date`, `idx_indicators_date_rank`, `idx_symbols_active`, `idx_runs_status_date`, `idx_fetch_log_failures`
+- [x] Write comprehensive unit tests (20 test cases, all passing)
 
-**Key Files:**
-- `internal/db/connection.go` - Database connection and pragmas
-- `internal/db/migrations.go` - Migration runner
-- `internal/db/schema.sql` - Initial schema with STRICT tables
-- `internal/db/repositories.go` - Data access layer
+**Implemented Files:**
+- `internal/db/connection.go` - Database connection manager with WAL mode and optimized pragmas
+- `internal/db/migrations.go` - Migration system with up/down support and version tracking
+- `internal/db/schema.sql` - STRICT tables schema with foreign keys and indexes
+- `internal/db/repositories.go` - Repository pattern for all tables with batch operations
+- `internal/db/connection_test.go` - Connection and pragma tests
+- `internal/db/migrations_test.go` - Migration and rollback tests
+- `internal/db/repositories_test.go` - Repository operation tests
 
 ---
 
