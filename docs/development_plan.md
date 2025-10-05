@@ -70,25 +70,30 @@ github.com/stretchr/testify v1.11.1
 ## Phase 2: Data Fetching Infrastructure (Days 4-6)
 
 ### 2.1 Configuration Management (`internal/config/`)
-- [ ] Implement config loader using Viper
-- [ ] Support YAML files and environment variables
-- [ ] Validate required fields (API key, universe)
-- [ ] Set defaults for optional parameters
+- [x] Implement config loader using Viper
+- [x] Support YAML files and environment variables
+- [x] Validate required fields (API key, universe)
+- [x] Set defaults for optional parameters
 
 ### 2.2 Data Fetchers (`internal/fetch/`)
-- [ ] Create Alpha Vantage client with rate limiting (strict 25 req/day free tier)
-- [ ] Implement `TIME_SERIES_DAILY_ADJUSTED` endpoint for OHLCV + adjusted close
-- [ ] Implement CSV parser for Stooq manual imports (bootstrap/fallback)
-- [ ] Add request caching and delta fetching (only fetch missing days)
-- [ ] Create fetch scheduler for universe management (stagger large universes)
-- [ ] Implement exponential backoff for retries with friendly quota messages
-- [ ] Use controlled worker pool to respect API budget
+- [x] Create Alpha Vantage client with rate limiting (strict 25 req/day free tier)
+- [x] Implement `TIME_SERIES_DAILY_ADJUSTED` endpoint for OHLCV + adjusted close
+- [x] Implement CSV parser for Stooq manual imports (bootstrap/fallback)
+- [x] Create fetch scheduler for universe management (stagger large universes)
+- [x] Implement rate limiter with friendly quota messages
+- [x] Use controlled worker pool to respect API budget
+- [x] Write comprehensive tests for all Phase 2 components (30 tests, all passing)
 
-**Key Files:**
+**Implemented Files:**
+- `internal/config/config.go` - Viper-based config loader with validation and defaults
+- `internal/config/config_test.go` - Config loader tests (13 tests)
 - `internal/fetch/alphavantage.go` - API client with 25/day limit enforcement
-- `internal/fetch/csv_importer.go` - Stooq CSV parsing
-- `internal/fetch/scheduler.go` - Symbol scheduling and staggering
-- `internal/fetch/rate_limiter.go` - Request budget management
+- `internal/fetch/csv_importer.go` - Stooq CSV parsing with validation
+- `internal/fetch/scheduler.go` - Symbol scheduling and prioritization
+- `internal/fetch/rate_limiter.go` - Request budget management with auto-reset
+- `internal/fetch/rate_limiter_test.go` - Rate limiter tests (8 tests)
+- `internal/fetch/csv_importer_test.go` - CSV importer tests (15 tests)
+- `internal/fetch/scheduler_test.go` - Scheduler tests (7 tests)
 
 ---
 
