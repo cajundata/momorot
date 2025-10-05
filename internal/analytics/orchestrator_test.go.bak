@@ -1,0 +1,382 @@
+package analytics
+
+import (
+	"math"
+	"testing"
+	"time"
+
+	"github.com/cajundata/momorot/internal/db"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func setupTestOrchestrator(t *testing.T) (*Orchestrator, *db.DB) {
+	// Create in-memory test database
+	database, err := db.New(db.Config{Path: ":memory:"})
+	require.NoError(t, err)
+
+	// Run migrations
+	err = database.Migrate()
+	require.NoError(t, err)
+
+	// Configure orchestrator
+	lookbacks := map[string]int{
+		"r1m":  5,
+		"r3m":  10,
+		"r6m":  15,
+		"r12m": 20,
+	}
+
+	volWindows := map[string]int{
+		"short": 10,
+		"long":  15,
+	}
+
+	scoringConfig := ScoringConfig{
+		PenaltyLambda:      0.35,
+		MinADV:             1000000,
+		BreadthMinPositive: 2,
+		BreadthTotal:       4,
+	}
+
+	orchestrator := NewOrchestrator(database, lookbacks, volWindows, scoringConfig)
+
+	return orchestrator, database
+}
+
+func TestNewOrchestrator(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	assert.NotNil(t, orch)
+	assert.NotNil(t, orch.database)
+	assert.NotNil(t, orch.calculator)
+	assert.NotNil(t, orch.scorer)
+}
+
+func TestComputeAllIndicators_Success(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Add test symbols
+	symbolRepo := db.NewSymbolRepository(database)
+	priceRepo := db.NewPriceRepository(database)
+
+	err := symbolRepo.Create(&db.Symbol{
+		Symbol:    "TEST1",
+		Name:      "Test Symbol 1",
+		AssetType: "ETF",
+		Active:    true,
+	})
+	require.NoError(t, err)
+
+	err = symbolRepo.Create(&db.Symbol{
+		Symbol:    "TEST2",
+		Name:      "Test Symbol 2",
+		AssetType: "ETF",
+		Active:    true,
+	})
+	require.NoError(t, err)
+
+	// Add price data for TEST1 (30 days with steady growth)
+	prices1 := make([]db.Price, 30)
+	price := 100.0
+	for i := 0; i < 30; i++ {
+		date := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
+		adjClose := price
+		vol := int64(1000000)
+		prices1[i] = db.Price{
+			Symbol:   "TEST1",
+			Date:     date.Format("2006-01-02"),
+			Open:     price,
+			High:     price * 1.02,
+			Low:      price * 0.98,
+			Close:    price * 1.01,
+			AdjClose: &adjClose,
+			Volume:   &vol,
+		}
+		price *= 1.01 // 1% daily growth
+	}
+
+	err = priceRepo.UpsertBatch(prices1)
+	require.NoError(t, err)
+
+	// Add price data for TEST2 (30 days with different pattern)
+	prices2 := make([]db.Price, 30)
+	price = 50.0
+	for i := 0; i < 30; i++ {
+		date := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
+		adjClose := price * 1.005 // 0.5% daily growth
+		vol := int64(2000000)
+		prices2[i] = db.Price{
+			Symbol:   "TEST2",
+			Date:     date.Format("2006-01-02"),
+			Open:     price,
+			High:     price * 1.02,
+			Low:      price * 0.98,
+			Close:    price * 1.005,
+			AdjClose: &adjClose,
+			Volume:   &vol,
+		}
+		price *= 1.005
+	}
+
+	err = priceRepo.UpsertBatch(prices2)
+	require.NoError(t, err)
+
+	// Compute indicators
+	asOfDate := time.Date(2024, 1, 30, 0, 0, 0, 0, time.UTC)
+	count, err := orch.ComputeAllIndicators(asOfDate)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, count, "Should process 2 symbols")
+
+	// Verify indicators were saved
+	top2, err := orch.GetTopRanked(asOfDate, 2)
+	require.NoError(t, err)
+	assert.Len(t, top2, 2)
+
+	// TEST1 should rank higher (1% daily > 0.5% daily)
+	assert.Equal(t, "TEST1", top2[0].Symbol)
+	assert.Equal(t, 1, top2[0].Indicators.Rank)
+
+	assert.Equal(t, "TEST2", top2[1].Symbol)
+	assert.Equal(t, 2, top2[1].Indicators.Rank)
+
+	// Verify indicators have reasonable values
+	assert.Greater(t, top2[0].Indicators.R1M, 0.0, "Returns should be positive")
+	assert.Greater(t, top2[0].Indicators.Vol6M, 0.0, "Volatility should be positive")
+	assert.Greater(t, top2[0].Indicators.ADV, 0.0, "ADV should be positive")
+}
+
+func TestComputeAllIndicators_NoActiveSymbols(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Don't add any symbols
+	asOfDate := time.Now()
+	_, err := orch.ComputeAllIndicators(asOfDate)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no active symbols")
+}
+
+func TestComputeAllIndicators_InsufficientData(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Add symbol with insufficient price data
+	err := database.SymbolRepo.Create(&db.Symbol{
+		Symbol:    "TEST",
+		Name:      "Test Symbol",
+		AssetType: "ETF",
+		Active:    1,
+	})
+	require.NoError(t, err)
+
+	// Add only 5 days of data (insufficient for our lookbacks)
+	prices := make([]*db.Price, 5)
+	for i := 0; i < 5; i++ {
+		date := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
+		adjClose := 100.0
+		prices[i] = &db.Price{
+			Symbol:   "TEST",
+			Date:     date.Format("2006-01-02"),
+			Open:     100.0,
+			High:     102.0,
+			Low:      98.0,
+			Close:    100.0,
+			AdjClose: &adjClose,
+			Volume:   1000000,
+		}
+	}
+
+	err = database.PriceRepo.UpsertBatch(prices)
+	require.NoError(t, err)
+
+	// Compute indicators should fail
+	asOfDate := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+	_, err = orch.ComputeAllIndicators(asOfDate)
+
+	assert.Error(t, err)
+}
+
+func TestGetTopRanked(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Insert mock indicators directly
+	asOfDate := time.Date(2024, 1, 30, 0, 0, 0, 0, time.UTC)
+	dateStr := asOfDate.Format("2006-01-02")
+
+	// Add symbols first
+	for _, symbol := range []string{"RANK1", "RANK2", "RANK3"} {
+		err := database.SymbolRepo.Create(&db.Symbol{
+			Symbol:    symbol,
+			Name:      symbol,
+			AssetType: "ETF",
+			Active:    1,
+		})
+		require.NoError(t, err)
+
+		// Add dummy price
+		adjClose := 100.0
+		err = database.PriceRepo.Create(&db.Price{
+			Symbol:   symbol,
+			Date:     dateStr,
+			Open:     100.0,
+			High:     100.0,
+			Low:      100.0,
+			Close:    100.0,
+			AdjClose: &adjClose,
+		})
+		require.NoError(t, err)
+	}
+
+	// Insert indicators
+	indicators := []*db.Indicator{
+		{
+			Symbol: "RANK1",
+			Date:   dateStr,
+			Score:  db.NullFloat(1.5),
+			Rank:   db.NullInt(1),
+		},
+		{
+			Symbol: "RANK2",
+			Date:   dateStr,
+			Score:  db.NullFloat(0.5),
+			Rank:   db.NullInt(2),
+		},
+		{
+			Symbol: "RANK3",
+			Date:   dateStr,
+			Score:  db.NullFloat(-0.5),
+			Rank:   db.NullInt(3),
+		},
+	}
+
+	err := database.IndicatorRepo.UpsertBatch(indicators)
+	require.NoError(t, err)
+
+	// Get top 2
+	top2, err := orch.GetTopRanked(asOfDate, 2)
+
+	require.NoError(t, err)
+	assert.Len(t, top2, 2)
+	assert.Equal(t, "RANK1", top2[0].Symbol)
+	assert.Equal(t, "RANK2", top2[1].Symbol)
+}
+
+func TestFetchPricesForSymbol(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Add symbol
+	err := database.SymbolRepo.Create(&db.Symbol{
+		Symbol:    "TEST",
+		Name:      "Test",
+		AssetType: "ETF",
+		Active:    1,
+	})
+	require.NoError(t, err)
+
+	// Add prices
+	prices := make([]*db.Price, 10)
+	for i := 0; i < 10; i++ {
+		date := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
+		adjClose := 100.0 + float64(i)
+		prices[i] = &db.Price{
+			Symbol:   "TEST",
+			Date:     date.Format("2006-01-02"),
+			Open:     100.0,
+			High:     105.0,
+			Low:      95.0,
+			Close:    100.0,
+			AdjClose: &adjClose,
+			Volume:   1000000,
+		}
+	}
+
+	err = database.PriceRepo.UpsertBatch(prices)
+	require.NoError(t, err)
+
+	// Fetch prices
+	priceBars, err := orch.fetchPricesForSymbol("TEST")
+
+	require.NoError(t, err)
+	assert.Len(t, priceBars, 10)
+
+	// Verify sorted by date
+	for i := 1; i < len(priceBars); i++ {
+		assert.True(t, priceBars[i].Date.After(priceBars[i-1].Date))
+	}
+
+	// Verify data integrity
+	assert.Equal(t, 100.0, priceBars[0].AdjClose)
+	assert.Equal(t, 109.0, priceBars[9].AdjClose)
+}
+
+func TestFetchPricesForSymbol_NoData(t *testing.T) {
+	orch, database := setupTestOrchestrator(t)
+	defer database.Close()
+
+	// Try to fetch for non-existent symbol
+	_, err := orch.fetchPricesForSymbol("NONEXISTENT")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no price data found")
+}
+
+// Benchmark: Full indicator computation for 25 symbols
+func BenchmarkComputeAllIndicators_25Symbols(b *testing.B) {
+	orch, database := setupTestOrchestrator(&testing.T{})
+	defer database.Close()
+
+	// Add 25 symbols with 300 days of price data each
+	for i := 0; i < 25; i++ {
+		symbol := string(rune('A' + i))
+		err := database.SymbolRepo.Create(&db.Symbol{
+			Symbol:    symbol,
+			Name:      symbol,
+			AssetType: "ETF",
+			Active:    1,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		// Add 300 days of price data
+		prices := make([]*db.Price, 300)
+		price := 100.0
+		for j := 0; j < 300; j++ {
+			date := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, j)
+			adjClose := price * (1 + float64(i)*0.001) // Vary by symbol
+			prices[j] = &db.Price{
+				Symbol:   symbol,
+				Date:     date.Format("2006-01-02"),
+				Open:     price,
+				High:     price * 1.02,
+				Low:      price * 0.98,
+				Close:    price,
+				AdjClose: &adjClose,
+				Volume:   1000000,
+			}
+			price *= (1 + math.Sin(float64(j)/10)*0.01) // Add some variation
+		}
+
+		err = database.PriceRepo.UpsertBatch(prices)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	asOfDate := time.Date(2024, 10, 27, 0, 0, 0, 0, time.UTC)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := orch.ComputeAllIndicators(asOfDate)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
