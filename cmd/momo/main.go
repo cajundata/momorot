@@ -278,8 +278,8 @@ func runRefresh(configPath string) {
 			fmt.Printf("Fetching %s... ✓\n", result.Symbol)
 			successCount++
 
-			// Fetch and store prices
-			dailyData, err := avClient.FetchDailyAdjusted(result.Symbol, "compact")
+			// Fetch and store prices using FREE TIER endpoint
+			dailyData, err := avClient.FetchDaily(result.Symbol, "compact")
 			if err != nil {
 				fmt.Printf("  ⚠ Failed to fetch data: %v\n", err)
 				failureCount++
@@ -305,8 +305,11 @@ func runRefresh(configPath string) {
 				high, _ := strconv.ParseFloat(bar.High, 64)
 				low, _ := strconv.ParseFloat(bar.Low, 64)
 				close, _ := strconv.ParseFloat(bar.Close, 64)
-				adjClose, _ := strconv.ParseFloat(bar.AdjustedClose, 64)
 				volume, _ := strconv.ParseInt(bar.Volume, 10, 64)
+
+				// Free tier doesn't have adjusted close - use regular close
+				// Note: This means splits/dividends are NOT adjusted
+				adjClose := close
 
 				price := &db.Price{
 					Symbol:   result.Symbol,

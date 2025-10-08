@@ -383,22 +383,35 @@ export MOMOROT_LOG_LEVEL="debug"
 ### Alpha Vantage API
 
 **Endpoints Used:**
-- `TIME_SERIES_DAILY_ADJUSTED` - Daily OHLCV with dividends
+- `TIME_SERIES_DAILY` - Daily OHLCV data (free tier)
+- ~~`TIME_SERIES_DAILY_ADJUSTED`~~ - Premium only (requires paid subscription)
 
-**API Limits:**
+**API Tiers:**
 - **Free Tier**: 25 requests/day, 5 requests/minute
+  - ✅ Daily OHLCV prices
+  - ❌ No adjusted close (splits/dividends)
+  - ✅ Works with this application
 - **Premium**: 500+ requests/day
+  - ✅ Adjusted prices
+  - ✅ Dividend/split data
+  - Requires paid subscription
 
 **Data Coverage:**
 - 20+ years of daily history
-- Adjusted for splits and dividends
 - US equities and ETFs
+- Real-time during market hours
+
+**Important Notes:**
+- ⚠️ **Free tier does NOT include adjusted prices** - Stock splits and dividends are not automatically adjusted
+- For accurate historical comparisons across splits, consider premium tier or manual adjustments
+- Most liquid ETFs (SPY, QQQ, IWM, etc.) have minimal splits, so impact is limited for short-term momentum
 
 **Best Practices:**
 1. Use `only_fetch_deltas: true` to minimize API calls
-2. Set `daily_request_limit` to avoid quota exhaustion
-3. Run refresh once daily (after market close)
-4. Keep `max_workers` ≤ 5 for free tier
+2. Set `daily_request_limit: 25` to avoid quota exhaustion
+3. Run refresh once daily (after market close at 4:30 PM ET)
+4. Keep `max_workers` ≤ 5 for free tier rate limits
+5. Focus on ETFs which have fewer split/dividend events
 
 ## 🛠️ Development
 

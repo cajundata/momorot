@@ -102,11 +102,11 @@ func (s *Scheduler) worker(ctx context.Context, wg *sync.WaitGroup, tasks <-chan
 	}
 }
 
-// fetchSymbol fetches data for a single symbol.
+// fetchSymbol fetches data for a single symbol using FREE TIER endpoint.
 func (s *Scheduler) fetchSymbol(task FetchTask) FetchResult {
 	startTime := time.Now()
 
-	data, err := s.avClient.FetchDailyAdjusted(task.Symbol, task.OutputSize)
+	data, err := s.avClient.FetchDaily(task.Symbol, task.OutputSize)
 
 	duration := time.Since(startTime)
 

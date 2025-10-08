@@ -60,7 +60,7 @@ type DailyMetaData struct {
 	TimeZone      string `json:"5. Time Zone"`
 }
 
-// DailyOHLCV represents a single day's OHLCV data with adjusted close.
+// DailyOHLCV represents a single day's OHLCV data with adjusted close (PREMIUM).
 type DailyOHLCV struct {
 	Open             string `json:"1. open"`
 	High             string `json:"2. high"`
@@ -70,6 +70,24 @@ type DailyOHLCV struct {
 	Volume           string `json:"6. volume"`
 	DividendAmount   string `json:"7. dividend amount"`
 	SplitCoefficient string `json:"8. split coefficient"`
+}
+
+// Daily represents the TIME_SERIES_DAILY response structure (FREE TIER).
+type Daily struct {
+	MetaData      DailyMetaData           `json:"Meta Data"`
+	TimeSeries    map[string]DailyBar     `json:"Time Series (Daily)"`
+	ErrorMessage  string                  `json:"Error Message,omitempty"`
+	Note          string                  `json:"Note,omitempty"`
+	Information   string                  `json:"Information,omitempty"`
+}
+
+// DailyBar represents a single day's OHLCV data (FREE TIER - no adjusted close).
+type DailyBar struct {
+	Open   string `json:"1. open"`
+	High   string `json:"2. high"`
+	Low    string `json:"3. low"`
+	Close  string `json:"4. close"`
+	Volume string `json:"5. volume"`
 }
 
 // FetchDailyAdjusted fetches daily adjusted OHLCV data for a symbol.
@@ -130,6 +148,76 @@ func (c *AlphaVantageClient) FetchDailyAdjusted(symbol, outputSize string) (*Dai
 	// Check for rate limit note
 	if data.Note != "" {
 		return nil, fmt.Errorf("API rate limit note for %s: %s", symbol, data.Note)
+	}
+
+	// Verify we got data
+	if len(data.TimeSeries) == 0 {
+		// Debug: print first 500 chars of response to help diagnose
+		return nil, fmt.Errorf("no data returned for %s (response preview: %s)", symbol, string(body[:min(500, len(body))]))
+	}
+
+	return &data, nil
+}
+
+// FetchDaily fetches daily OHLCV data for a symbol using the FREE TIER endpoint.
+// outputSize can be "compact" (100 days) or "full" (20+ years).
+// Note: This endpoint does NOT include adjusted close, dividends, or split info.
+func (c *AlphaVantageClient) FetchDaily(symbol, outputSize string) (*Daily, error) {
+	// Check rate limit before making request
+	if err := c.rateLimiter.Wait(); err != nil {
+		return nil, fmt.Errorf("rate limit exceeded: %w", err)
+	}
+
+	// Build request URL
+	params := url.Values{}
+	params.Add("function", "TIME_SERIES_DAILY")
+	params.Add("symbol", symbol)
+	params.Add("outputsize", outputSize)
+	params.Add("apikey", c.apiKey)
+
+	reqURL := fmt.Sprintf("%s?%s", c.baseURL, params.Encode())
+
+	// Make request
+	resp, err := c.httpClient.Get(reqURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data for %s: %w", symbol, err)
+	}
+	defer resp.Body.Close()
+
+	// Record the request
+	c.rateLimiter.RecordRequest()
+
+	// Check HTTP status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body for %s: %w", symbol, err)
+	}
+
+	// Parse response
+	var data Daily
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, fmt.Errorf("failed to decode response for %s: %w (first 200 chars: %s)", symbol, err, string(body[:min(200, len(body))]))
+	}
+
+	// Check for API errors
+	if data.ErrorMessage != "" {
+		return nil, fmt.Errorf("API error for %s: %s", symbol, data.ErrorMessage)
+	}
+
+	// Check for rate limit note
+	if data.Note != "" {
+		return nil, fmt.Errorf("API rate limit note for %s: %s", symbol, data.Note)
+	}
+
+	// Check for premium endpoint message
+	if data.Information != "" {
+		return nil, fmt.Errorf("API information for %s: %s", symbol, data.Information)
 	}
 
 	// Verify we got data
