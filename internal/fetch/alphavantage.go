@@ -110,10 +110,16 @@ func (c *AlphaVantageClient) FetchDailyAdjusted(symbol, outputSize string) (*Dai
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body for %s: %w", symbol, err)
+	}
+
 	// Parse response
 	var data DailyAdjusted
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode response for %s: %w", symbol, err)
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, fmt.Errorf("failed to decode response for %s: %w (first 200 chars: %s)", symbol, err, string(body[:min(200, len(body))]))
 	}
 
 	// Check for API errors
@@ -128,7 +134,8 @@ func (c *AlphaVantageClient) FetchDailyAdjusted(symbol, outputSize string) (*Dai
 
 	// Verify we got data
 	if len(data.TimeSeries) == 0 {
-		return nil, fmt.Errorf("no data returned for %s", symbol)
+		// Debug: print first 500 chars of response to help diagnose
+		return nil, fmt.Errorf("no data returned for %s (response preview: %s)", symbol, string(body[:min(500, len(body))]))
 	}
 
 	return &data, nil
@@ -187,4 +194,12 @@ func (c *AlphaVantageClient) GetRateLimiterStatus() *RateLimiterStatus {
 // ResetRateLimiter manually resets the rate limiter (for testing or admin purposes).
 func (c *AlphaVantageClient) ResetRateLimiter() {
 	c.rateLimiter.Reset()
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
