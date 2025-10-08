@@ -268,6 +268,25 @@ github.com/stretchr/testify v1.11.1
 
 **Note**: Components are tested indirectly through screen integration tests (88.3% overall coverage)
 
+### 4.4 Main Model Integration ⏳ **PENDING (0%)**
+
+- [ ] Update main Model to use concrete screen types instead of interface
+- [ ] Replace placeholder currentScreen with typed screens
+- [ ] Implement screen navigation state machine
+- [ ] Wire up screen switching logic (Tab 1-5 for screens)
+- [ ] Pass database connection to screen constructors
+- [ ] Handle screen initialization and data loading
+- [ ] Implement screen-to-screen navigation (e.g., Leaders → Symbol Detail)
+- [ ] Add drill-down navigation with back/breadcrumb support
+- [ ] Update status bar to show current screen name
+- [ ] Test full navigation flow between all screens
+
+**Expected Changes:**
+- `internal/ui/model.go` - Add typed screen fields, implement navigation
+- `internal/ui/update.go` - Handle screen switching messages
+- `internal/ui/view.go` - Render active screen
+- Integration tests for screen transitions
+
 ---
 
 ## Phase 5: Export & Reporting (Days 16-17)
