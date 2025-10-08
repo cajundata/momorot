@@ -61,7 +61,8 @@ func TestInit(t *testing.T) {
 	defer database.Close()
 
 	cmd := model.Init()
-	assert.Nil(t, cmd)
+	// Init should return a batch command that initializes all screens
+	assert.NotNil(t, cmd)
 }
 
 func TestNavigateTo(t *testing.T) {

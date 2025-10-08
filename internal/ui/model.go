@@ -4,6 +4,7 @@ import (
 	"github.com/cajundata/momorot/internal/analytics"
 	"github.com/cajundata/momorot/internal/config"
 	"github.com/cajundata/momorot/internal/db"
+	"github.com/cajundata/momorot/internal/ui/screens"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -30,11 +31,14 @@ type Model struct {
 	screenHistory []Screen // For back navigation
 
 	// Screen-specific models
-	dashboard interface{} // Will be dashboardModel
-	leaders   interface{} // Will be leadersModel
-	universe  interface{} // Will be universeModel
-	symbol    interface{} // Will be symbolModel
-	logs      interface{} // Will be logsModel
+	dashboard screens.DashboardModel
+	leaders   screens.LeadersModel
+	universe  screens.UniverseModel
+	symbol    screens.SymbolModel
+	logs      screens.LogsModel
+
+	// Symbol drill-down state
+	selectedSymbol string // For navigating from Leaders to Symbol Detail
 
 	// Global UI state
 	loading      bool
@@ -73,23 +77,47 @@ func New(database *db.DB, cfg *config.Config) Model {
 		},
 	)
 
+	// Initial dimensions (will be updated by WindowSizeMsg)
+	width := 80
+	height := 24
+	contentHeight := height - 6 // Account for header (3 lines) and status bar (3 lines)
+
+	// Initialize all screens
+	dashboard := screens.NewDashboard(database, width, contentHeight)
+	leaders := screens.NewLeaders(database, width, contentHeight)
+	universe := screens.NewUniverse(database, width, contentHeight)
+	symbol := screens.NewSymbol(database, "", width, contentHeight) // Empty symbol initially
+	logs := screens.NewLogs(database, width, contentHeight)
+
 	return Model{
 		db:            database,
 		orchestrator:  orchestrator,
 		config:        cfg,
 		currentScreen: ScreenDashboard,
 		screenHistory: []Screen{},
+		dashboard:     dashboard,
+		leaders:       leaders,
+		universe:      universe,
+		symbol:        symbol,
+		logs:          logs,
 		keys:          DefaultKeyBindings(),
 		theme:         DefaultTheme(),
 		loading:       false,
-		width:         80,
-		height:        24,
+		width:         width,
+		height:        height,
 	}
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return nil
+	// Initialize all screens
+	return tea.Batch(
+		m.dashboard.Init(),
+		m.leaders.Init(),
+		m.universe.Init(),
+		m.symbol.Init(),
+		m.logs.Init(),
+	)
 }
 
 // NavigateTo changes the current screen.
@@ -125,4 +153,19 @@ func (m *Model) ClearError() {
 // SetStatus sets the status bar message.
 func (m *Model) SetStatus(msg string) {
 	m.statusBarMsg = msg
+}
+
+// NavigateToSymbol navigates to the Symbol Detail screen with the given symbol.
+func (m *Model) NavigateToSymbol(symbol string) {
+	m.selectedSymbol = symbol
+	m.NavigateTo(ScreenSymbol)
+	// Reinitialize symbol screen with new symbol
+	m.symbol = screens.NewSymbol(m.db, symbol, m.width, m.height-6)
+}
+
+// Messages for screen navigation
+
+// NavigateToSymbolMsg is sent when a screen wants to drill down to symbol detail.
+type NavigateToSymbolMsg struct {
+	Symbol string
 }

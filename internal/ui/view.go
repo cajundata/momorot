@@ -97,8 +97,10 @@ func (m Model) renderStatusBar() string {
 		return m.theme.StatusBarInfo.Render(m.statusBarMsg)
 	}
 
-	// Default help text from key bindings
-	helpText := ""
+	// Default help text with current screen name
+	screenName := m.getScreenName()
+	helpText := fmt.Sprintf("[%s] ", screenName)
+
 	for i, binding := range m.keys.ShortHelp() {
 		if i > 0 {
 			helpText += " | "
@@ -109,34 +111,45 @@ func (m Model) renderStatusBar() string {
 	return m.theme.Help.Render(helpText)
 }
 
-// Screen-specific view functions (stubs for now).
+// getScreenName returns the name of the current screen.
+func (m Model) getScreenName() string {
+	switch m.currentScreen {
+	case ScreenDashboard:
+		return "Dashboard"
+	case ScreenLeaders:
+		return "Leaders"
+	case ScreenUniverse:
+		return "Universe"
+	case ScreenSymbol:
+		if m.selectedSymbol != "" {
+			return fmt.Sprintf("Symbol: %s", m.selectedSymbol)
+		}
+		return "Symbol"
+	case ScreenLogs:
+		return "Logs"
+	default:
+		return "Unknown"
+	}
+}
+
+// Screen-specific view functions that delegate to screen models.
 
 func (m Model) viewDashboard() string {
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Render("📊 Dashboard\n\nLast Run: N/A\nCache Health: N/A\nAPI Quota: N/A")
+	return m.dashboard.View()
 }
 
 func (m Model) viewLeaders() string {
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Render("🏆 Top Leaders\n\n[Table will be rendered here]")
+	return m.leaders.View()
 }
 
 func (m Model) viewUniverse() string {
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Render("🌐 Symbol Universe\n\n[Symbol list will be rendered here]")
+	return m.universe.View()
 }
 
 func (m Model) viewSymbol() string {
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Render("📈 Symbol Detail\n\n[Symbol details will be rendered here]")
+	return m.symbol.View()
 }
 
 func (m Model) viewLogs() string {
-	return lipgloss.NewStyle().
-		Padding(1, 2).
-		Render("📝 Runs & Logs\n\n[Log history will be rendered here]")
+	return m.logs.View()
 }

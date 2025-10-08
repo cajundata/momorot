@@ -7,6 +7,8 @@ import (
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -14,6 +16,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		// Update all screens with new dimensions
+		m.dashboard, _ = m.dashboard.Update(msg)
+		m.leaders, _ = m.leaders.Update(msg)
+		m.universe, _ = m.universe.Update(msg)
+		m.symbol, _ = m.symbol.Update(msg)
+		m.logs, _ = m.logs.Update(msg)
+
 		return m, nil
 
 	case refreshCompleteMsg:
@@ -25,9 +35,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SetLoading(false, "")
 		m.SetError(string(msg))
 		return m, nil
+
+	case NavigateToSymbolMsg:
+		m.NavigateToSymbol(msg.Symbol)
+		return m, m.symbol.Init()
 	}
 
-	return m, nil
+	// Pass all other messages to the active screen
+	switch m.currentScreen {
+	case ScreenDashboard:
+		m.dashboard, cmd = m.dashboard.Update(msg)
+	case ScreenLeaders:
+		m.leaders, cmd = m.leaders.Update(msg)
+	case ScreenUniverse:
+		m.universe, cmd = m.universe.Update(msg)
+	case ScreenSymbol:
+		m.symbol, cmd = m.symbol.Update(msg)
+	case ScreenLogs:
+		m.logs, cmd = m.logs.Update(msg)
+	}
+
+	return m, cmd
 }
 
 // handleKeyPress processes keyboard input.
@@ -102,31 +130,36 @@ func (m Model) navigatePrev() Model {
 	return m
 }
 
-// Screen-specific update functions (stubs for now).
+// Screen-specific update functions that delegate to screen models.
 
 func (m Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// TODO: Implement dashboard-specific key handling
-	return m, nil
+	var cmd tea.Cmd
+	m.dashboard, cmd = m.dashboard.Update(msg)
+	return m, cmd
 }
 
 func (m Model) updateLeaders(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// TODO: Implement leaders-specific key handling
-	return m, nil
+	var cmd tea.Cmd
+	m.leaders, cmd = m.leaders.Update(msg)
+	return m, cmd
 }
 
 func (m Model) updateUniverse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// TODO: Implement universe-specific key handling
-	return m, nil
+	var cmd tea.Cmd
+	m.universe, cmd = m.universe.Update(msg)
+	return m, cmd
 }
 
 func (m Model) updateSymbol(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// TODO: Implement symbol-specific key handling
-	return m, nil
+	var cmd tea.Cmd
+	m.symbol, cmd = m.symbol.Update(msg)
+	return m, cmd
 }
 
 func (m Model) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// TODO: Implement logs-specific key handling
-	return m, nil
+	var cmd tea.Cmd
+	m.logs, cmd = m.logs.Update(msg)
+	return m, cmd
 }
 
 // Messages for async operations.
