@@ -11,7 +11,7 @@ A containerized Go TUI application that fetches daily OHLCV data, computes momen
 - ✅ **Phase 3: Analytics Engine** - COMPLETE (100%)
 - ✅ **Phase 4: Terminal UI Implementation** - COMPLETE (100%)
 - ✅ **Phase 5: Export & Reporting** - COMPLETE (100%)
-- ⏳ **Phase 6: Main Application Assembly** - PENDING
+- ✅ **Phase 6: Main Application Assembly** - COMPLETE (100%)
 - ⏳ **Phase 7: Testing & Quality Assurance** - PENDING
 - ⏳ **Phase 8: Containerization & Deployment** - PENDING
 - ⏳ **Phase 9: Documentation & Reporting** - PENDING
@@ -22,7 +22,7 @@ A containerized Go TUI application that fetches daily OHLCV data, computes momen
 - **Test Coverage**: Analytics 66.1%, Config 82.1%, DB 82.0%, Export 80.6%, Fetch 47.4%, UI 57.0%, Screens 88.3%
 - **Lines of Code**: ~7,000 (excluding tests)
 - **Files Implemented**: 42 files (17 UI + 2 export + 23 other modules)
-- **Current Milestone**: Phase 5 COMPLETE - CSV export functionality for leaders, rankings, runs, and symbol details
+- **Current Milestone**: Phase 6 COMPLETE - Main application with CLI, TUI, and all subcommands (run, refresh, export, ping)
 
 ---
 
@@ -335,20 +335,63 @@ github.com/stretchr/testify v1.11.1
 
 ---
 
-## Phase 6: Main Application Assembly (Days 18-19)
+## Phase 6: Main Application Assembly (Days 18-19) ✅ **COMPLETED**
 
 ### 6.1 CLI Entry Point (`cmd/momo/main.go`)
-- [ ] Command-line argument parsing (flags package or cobra)
-- [ ] Subcommands: `run` (TUI), `refresh`, `export`, `ping` (for healthcheck)
-- [ ] Version information embedding via ldflags
-- [ ] Graceful shutdown handling (SIGINT, SIGTERM)
+- [x] Command-line argument parsing (flags package)
+- [x] Subcommands: `run` (TUI), `refresh`, `export`, `ping` (for healthcheck)
+- [x] Version information embedding via ldflags
+- [x] Graceful shutdown handling (SIGINT, SIGTERM)
 
 ### 6.2 Application Lifecycle
-- [ ] Database initialization at `./data/momentum.db` (or configurable `data_dir`)
-- [ ] Config loading from `config.yaml` or env vars (ALPHAVANTAGE_API_KEY)
-- [ ] TUI launch with Bubble Tea program
-- [ ] Background refresh worker with controlled concurrency
-- [ ] Signal handling and cleanup (flush DB, close connections)
+- [x] Database initialization at `./data/momentum.db` (or configurable `data_dir`)
+- [x] Config loading from `config.yaml` or env vars (ALPHAVANTAGE_API_KEY)
+- [x] TUI launch with Bubble Tea program
+- [x] Data refresh with concurrent fetching and analytics computation
+- [x] Signal handling and cleanup (flush DB, close connections)
+
+**Implemented Files:**
+- `cmd/momo/main.go` - Main CLI entry point with 4 subcommands (run, refresh, export, ping)
+
+**Subcommands:**
+1. **run** - Launches the Bubble Tea TUI application
+   - Loads configuration from YAML or defaults
+   - Initializes database with migrations
+   - Sets up signal handling for graceful shutdown
+   - Launches full-screen terminal UI
+
+2. **refresh** - Fetches latest data and recomputes analytics
+   - Creates run record with unique ID
+   - Fetches data using Alpha Vantage client with scheduler
+   - Stores price data with duplicate handling
+   - Computes momentum indicators and rankings
+   - Updates run status with success/failure counts
+   - Auto-exports if configured
+
+3. **export** - Exports data to CSV files
+   - Leaders export: Top N momentum leaders
+   - Rankings export: Full ranked universe
+   - Runs export: Run history and metadata
+   - Symbol export: Detailed time series for specific symbol
+
+4. **ping** - Health check and diagnostics
+   - Validates configuration file
+   - Checks database connectivity
+   - Reports active symbol count
+   - Verifies latest price data availability
+   - Checks export directory status
+
+**Version Information:**
+- Variables for version, commit hash, and build date
+- Populated via ldflags at build time:
+  ```bash
+  go build -ldflags "-X main.version=v1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.buildDate=$(date -u +%Y%m%d-%H%M%S)" -o momo ./cmd/momo
+  ```
+
+**Graceful Shutdown:**
+- Signal handling for SIGINT and SIGTERM
+- Proper cleanup of database connections
+- Flush pending writes before exit
 
 ---
 
